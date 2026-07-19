@@ -5,19 +5,6 @@ import matplotlib.pyplot as plt
 import re
 
 
-def check_database():
-
-    conn = sqlite3.connect("retail.db")
-
-    tables = pd.read_sql(
-        "SELECT name FROM sqlite_master WHERE type='table';",
-        conn
-    )
-
-    conn.close()
-
-    return tables
-
 # ============================================================
 # PAGE CONFIGURATION
 # ============================================================
@@ -34,7 +21,10 @@ st.set_page_config(
 # ============================================================
 
 st.title("📊 AI Business Analyst")
-st.write("Ask a business question about your retail sales data.")
+
+st.write(
+    "Ask a business question about your retail sales data."
+)
 
 
 # ============================================================
@@ -61,6 +51,28 @@ allowed_columns = {
 
 
 # ============================================================
+# DATABASE CHECK
+# ============================================================
+
+def check_database():
+
+    conn = sqlite3.connect(DB_NAME)
+
+    tables = pd.read_sql(
+        """
+        SELECT name
+        FROM sqlite_master
+        WHERE type='table';
+        """,
+        conn
+    )
+
+    conn.close()
+
+    return tables
+
+
+# ============================================================
 # SQL VALIDATION
 # ============================================================
 
@@ -68,13 +80,13 @@ def validate_sql(sql: str):
 
     sql_lower = sql.lower()
 
-    # 1️⃣ Only SELECT allowed
+    # Only SELECT allowed
     if not sql_lower.strip().startswith("select"):
 
         return False, "Only SELECT queries are allowed."
 
 
-    # 2️⃣ Block dangerous keywords
+    # Block dangerous SQL keywords
     forbidden = [
         "drop",
         "delete",
@@ -86,12 +98,17 @@ def validate_sql(sql: str):
 
     for word in forbidden:
 
-        if re.search(rf"\b{word}\b", sql_lower):
+        if re.search(
+            rf"\b{word}\b",
+            sql_lower
+        ):
 
-            return False, f"Forbidden keyword detected: {word}"
+            return False, (
+                f"Forbidden keyword detected: {word}"
+            )
 
 
-    # 3️⃣ Validate table name
+    # Check FROM clause
     from_match = re.search(
         r"\bfrom\s+([a-z_][a-z0-9_]*)",
         sql_lower
@@ -104,12 +121,15 @@ def validate_sql(sql: str):
 
     table = from_match.group(1)
 
+
     if table not in allowed_tables:
 
-        return False, f"Table '{table}' is not allowed."
+        return False, (
+            f"Table '{table}' is not allowed."
+        )
 
 
-    # 4️⃣ Extract tokens
+    # Extract SQL tokens
     tokens = re.findall(
         r"\b[a-z_][a-z0-9_]*\b",
         sql_lower
@@ -173,7 +193,9 @@ def validate_sql(sql: str):
             continue
 
 
-        return False, f"Column '{token}' is not allowed."
+        return False, (
+            f"Column '{token}' is not allowed."
+        )
 
 
     return True, "SQL is valid"
@@ -188,10 +210,21 @@ def preprocess(question):
     q = question.lower()
 
 
-    # Fix common spelling mistakes
-    q = q.replace("revenut", "revenue")
-    q = q.replace("revanue", "revenue")
-    q = q.replace("revnue", "revenue")
+    # Common spelling corrections
+    q = q.replace(
+        "revenut",
+        "revenue"
+    )
+
+    q = q.replace(
+        "revanue",
+        "revenue"
+    )
+
+    q = q.replace(
+        "revnue",
+        "revenue"
+    )
 
 
     return q
@@ -213,7 +246,9 @@ def smart_sql_generator(question):
     if (
 
         ("month" in q or "monthly" in q)
+
         and "revenue" in q
+
         and "highest" not in q
 
     ):
@@ -242,10 +277,15 @@ def smart_sql_generator(question):
     if (
 
         (
+
             "highest" in q
+
             or "top" in q
+
             or "maximum" in q
+
             or "max" in q
+
         )
 
         and "month" in q
@@ -277,7 +317,13 @@ def smart_sql_generator(question):
 
     if (
 
-        ("country" in q or "countries" in q)
+        (
+
+            "country" in q
+
+            or "countries" in q
+
+        )
 
         and "revenue" in q
 
@@ -310,11 +356,18 @@ def smart_sql_generator(question):
 
     if (
 
-        ("country" in q or "countries" in q)
+        (
+
+            "country" in q
+
+            or "countries" in q
+
+        )
 
         and (
 
             "top" in q
+
             or "best" in q
 
         )
@@ -346,11 +399,18 @@ def smart_sql_generator(question):
 
     if (
 
-        ("product" in q or "products" in q)
+        (
+
+            "product" in q
+
+            or "products" in q
+
+        )
 
         and (
 
             "top" in q
+
             or "best" in q
 
         )
@@ -382,7 +442,13 @@ def smart_sql_generator(question):
 
     if (
 
-        ("product" in q or "products" in q)
+        (
+
+            "product" in q
+
+            or "products" in q
+
+        )
 
         and "revenue" in q
 
@@ -416,6 +482,7 @@ def smart_sql_generator(question):
         and (
 
             "top" in q
+
             or "best" in q
 
         )
@@ -503,7 +570,13 @@ def smart_sql_generator(question):
 
     if (
 
-        ("daily" in q or "date" in q)
+        (
+
+            "daily" in q
+
+            or "date" in q
+
+        )
 
         and "revenue" in q
 
@@ -538,7 +611,7 @@ def generate_explanation(df):
     cols = df.columns.tolist()
 
 
-    # Monthly trend
+    # Monthly analysis
     if "month" in cols:
 
         max_row = df.loc[
@@ -632,193 +705,239 @@ def generate_explanation(df):
 
 
 # ============================================================
-# QUERY EXECUTION AND CHART
+# RUN SQL AND CREATE CHART
 # ============================================================
 
 def run_query_and_plot(sql_query):
 
-    conn = sqlite3.connect(DB_NAME)
+    try:
+
+        conn = sqlite3.connect(DB_NAME)
 
 
-    df = pd.read_sql(
+        df = pd.read_sql(
 
-        sql_query,
+            sql_query,
 
-        conn
-
-    )
-
-
-    conn.close()
-
-
-    # Show result table
-    st.subheader("📋 Query Result")
-
-    st.dataframe(df)
-
-
-    # ========================================================
-    # MONTHLY REVENUE
-    # ========================================================
-
-    if "month" in df.columns:
-
-        st.subheader("📈 Monthly Revenue")
-
-
-        fig, ax = plt.subplots(
-            figsize=(10, 5)
-        )
-
-
-        ax.plot(
-
-            df["month"],
-
-            df["total_revenue"]
+            conn
 
         )
 
 
-        ax.set_xlabel("Month")
-
-        ax.set_ylabel("Revenue")
-
-        ax.set_title("Monthly Revenue")
+        conn.close()
 
 
-        plt.xticks(
-            rotation=45
+        # Show data
+        st.subheader("📋 Query Result")
+
+        st.dataframe(df)
+
+
+        # ====================================================
+        # MONTHLY REVENUE
+        # ====================================================
+
+        if "month" in df.columns:
+
+            st.subheader("📈 Monthly Revenue")
+
+
+            fig, ax = plt.subplots(
+                figsize=(10, 5)
+            )
+
+
+            ax.plot(
+
+                df["month"],
+
+                df["total_revenue"]
+
+            )
+
+
+            ax.set_xlabel("Month")
+
+            ax.set_ylabel("Revenue")
+
+            ax.set_title("Monthly Revenue")
+
+
+            plt.xticks(
+                rotation=45
+            )
+
+
+            st.pyplot(fig)
+
+
+        # ====================================================
+        # COUNTRY REVENUE
+        # ====================================================
+
+        elif "Country" in df.columns:
+
+            st.subheader("🌍 Revenue by Country")
+
+
+            fig, ax = plt.subplots(
+                figsize=(10, 5)
+            )
+
+
+            ax.barh(
+
+                df["Country"],
+
+                df["total_revenue"]
+
+            )
+
+
+            ax.set_xlabel("Revenue")
+
+            ax.set_ylabel("Country")
+
+            ax.set_title("Revenue by Country")
+
+
+            ax.invert_yaxis()
+
+
+            st.pyplot(fig)
+
+
+        # ====================================================
+        # CUSTOMER REVENUE
+        # ====================================================
+
+        elif "CustomerID" in df.columns:
+
+            st.subheader("👥 Top Customers")
+
+
+            fig, ax = plt.subplots(
+                figsize=(10, 5)
+            )
+
+
+            ax.barh(
+
+                df["CustomerID"].astype(str),
+
+                df["total_revenue"]
+
+            )
+
+
+            ax.set_xlabel("Revenue")
+
+            ax.set_ylabel("Customer ID")
+
+            ax.set_title("Top Customers")
+
+
+            ax.invert_yaxis()
+
+
+            st.pyplot(fig)
+
+
+        # ====================================================
+        # PRODUCT REVENUE
+        # ====================================================
+
+        elif "Description" in df.columns:
+
+            st.subheader("🛍️ Top Products")
+
+
+            fig, ax = plt.subplots(
+                figsize=(10, 5)
+            )
+
+
+            ax.barh(
+
+                df["Description"],
+
+                df["total_revenue"]
+
+            )
+
+
+            ax.set_xlabel("Revenue")
+
+            ax.set_ylabel("Product")
+
+
+            ax.set_title("Top Products")
+
+
+            ax.invert_yaxis()
+
+
+            st.pyplot(fig)
+
+
+        # ====================================================
+        # BUSINESS INSIGHT
+        # ====================================================
+
+        explanation = generate_explanation(df)
+
+
+        st.subheader("💡 Business Insight")
+
+
+        st.success(explanation)
+
+
+    except Exception as e:
+
+        st.error(
+            f"Database Error: {e}"
         )
-
-
-        st.pyplot(fig)
-
-
-    # ========================================================
-    # COUNTRY REVENUE
-    # ========================================================
-
-    elif "Country" in df.columns:
-
-        st.subheader("🌍 Revenue by Country")
-
-
-        fig, ax = plt.subplots(
-            figsize=(10, 5)
-        )
-
-
-        ax.barh(
-
-            df["Country"],
-
-            df["total_revenue"]
-
-        )
-
-
-        ax.set_xlabel("Revenue")
-
-        ax.set_ylabel("Country")
-
-        ax.set_title("Revenue by Country")
-
-
-        ax.invert_yaxis()
-
-
-        st.pyplot(fig)
-
-
-    # ========================================================
-    # CUSTOMER REVENUE
-    # ========================================================
-
-    elif "CustomerID" in df.columns:
-
-        st.subheader("👥 Top Customers")
-
-
-        fig, ax = plt.subplots(
-            figsize=(10, 5)
-        )
-
-
-        ax.barh(
-
-            df["CustomerID"].astype(str),
-
-            df["total_revenue"]
-
-        )
-
-
-        ax.set_xlabel("Revenue")
-
-        ax.set_ylabel("Customer ID")
-
-        ax.set_title("Top Customers")
-
-
-        ax.invert_yaxis()
-
-
-        st.pyplot(fig)
-
-
-    # ========================================================
-    # PRODUCT REVENUE
-    # ========================================================
-
-    elif "Description" in df.columns:
-
-        st.subheader("🛍️ Top Products")
-
-
-        fig, ax = plt.subplots(
-            figsize=(10, 5)
-        )
-
-
-        ax.barh(
-
-            df["Description"],
-
-            df["total_revenue"]
-
-        )
-
-
-        ax.set_xlabel("Revenue")
-
-        ax.set_ylabel("Product")
-
-        ax.set_title("Top Products")
-
-
-        ax.invert_yaxis()
-
-
-        st.pyplot(fig)
-
-
-    # ========================================================
-    # BUSINESS INSIGHT
-    # ========================================================
-
-    explanation = generate_explanation(df)
-
-
-    st.subheader("💡 Business Insight")
-
-
-    st.success(explanation)
 
 
 # ============================================================
-# STREAMLIT USER INTERFACE
+# DATABASE STATUS
+# ============================================================
+
+st.sidebar.header("🗄️ Database Status")
+
+
+try:
+
+    database_tables = check_database()
+
+
+    if database_tables.empty:
+
+        st.sidebar.error(
+            "No tables found in retail.db"
+        )
+
+    else:
+
+        st.sidebar.success(
+            "Database connected"
+        )
+
+        st.sidebar.dataframe(
+            database_tables
+        )
+
+
+except Exception as e:
+
+    st.sidebar.error(
+        f"Database Error: {e}"
+    )
+
+
+# ============================================================
+# USER QUESTION
 # ============================================================
 
 user_question = st.text_input(
@@ -830,19 +949,22 @@ user_question = st.text_input(
 )
 
 
+# ============================================================
+# ANALYZE BUTTON
+# ============================================================
+
 if st.button("🔍 Analyze"):
 
 
     if not user_question:
 
         st.warning(
-
             "Please enter a business question."
-
         )
 
 
     else:
+
 
         # Generate SQL
         sql_query = smart_sql_generator(
@@ -853,13 +975,12 @@ if st.button("🔍 Analyze"):
         if not sql_query:
 
             st.error(
-
                 "Sorry, I couldn't understand the question."
-
             )
 
 
         else:
+
 
             # Show SQL
             st.subheader("🧠 Generated SQL")
@@ -883,13 +1004,11 @@ if st.button("🔍 Analyze"):
             if is_valid:
 
                 st.success(
-
                     f"Validation: {message}"
-
                 )
 
 
-                # Execute query and plot
+                # Execute SQL and create chart
                 run_query_and_plot(
                     sql_query
                 )
@@ -898,11 +1017,5 @@ if st.button("🔍 Analyze"):
             else:
 
                 st.error(
-
                     f"Query blocked: {message}"
-
                 )
-
- st.subheader("Database Tables")
-
-st.dataframe(check_database())               
