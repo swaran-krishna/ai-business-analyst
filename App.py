@@ -5,6 +5,19 @@ import matplotlib.pyplot as plt
 import re
 
 
+def check_database():
+
+    conn = sqlite3.connect("retail.db")
+
+    tables = pd.read_sql(
+        "SELECT name FROM sqlite_master WHERE type='table';",
+        conn
+    )
+
+    conn.close()
+
+    return tables
+
 # ============================================================
 # PAGE CONFIGURATION
 # ============================================================
@@ -889,3 +902,7 @@ if st.button("🔍 Analyze"):
                     f"Query blocked: {message}"
 
                 )
+
+ st.subheader("Database Tables")
+
+st.dataframe(check_database())               
