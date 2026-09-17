@@ -5,3 +5,6 @@ pandas
 matplotlib
 
 openpyxl
+
+python-dotenv
+google-generativeai
